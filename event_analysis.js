@@ -1,3 +1,4 @@
+const util = require('util')
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -26,7 +27,7 @@
 // 参考资料：
 // Reflect MDN https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Reflect
 // Reflect API 设计目的
-// What does the Reflect object do in JavaScript? 
+// What does the Reflect object do in JavaScript?
 // https://stackoverflow.com/questions/25421903/what-does-the-reflect-object-do-in-javascript#:~:text=However%2C%20there%20is%20a%20short%20explanation%20about%20it%27s%20purpose%20in%20ES%20Harmony%3A
 // ES6 设计反射 Reflect 的意义是什么？
 // https://www.zhihu.com/question/276403215
@@ -147,18 +148,21 @@ EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
   return _getMaxListeners(this);
 };
 
-// emit 触发器实现
+// emit 发射器实现，核心思想是依次执行每个 listener
 EventEmitter.prototype.emit = function emit(type) {
   var args = [];
   for (var i = 1; i < arguments.length; i++) args.push(arguments[i]);
   var doError = (type === 'error');
 
+  // 处理 emit('error') 的情况
+  // 
   var events = this._events;
   if (events !== undefined)
     doError = (doError && events.error === undefined);
   else if (!doError)
     return false;
 
+  console.log('doError after: >>>', doError)
   // If there is no 'error' event listener then throw.
   if (doError) {
     var er;
@@ -183,7 +187,7 @@ EventEmitter.prototype.emit = function emit(type) {
   /**
    * 函数：事件注册了单个侦听器，type: handler，直接执行
    * 数组：事件注册了多个侦听器，type: [handler, handler, ...]，使用 for 循环逐个调用
-   * 
+   *
    * 注意：执行的并不是原数组，而是 arrayClone 拷贝出来的一份，是为了防止在一个事件监听器中监听同一个事件，从而导致死循环的出现
    * 例如：
    * ee.on('event1', () => { ee.on('event1', ()=>{}) })
