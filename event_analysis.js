@@ -1,4 +1,4 @@
-const util = require('util')
+const inspect = require('util').inspect
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -155,14 +155,15 @@ EventEmitter.prototype.emit = function emit(type) {
   var doError = (type === 'error');
 
   // 处理 emit('error') 的情况
-  // 
+  // 如果 emit 的 type 参数为 'error'，但是没有为 error 注册监听 listener，就直接抛出 Error 错误
+  // throw er 后面的注释是有意为之，会在 Node 运行的控制台输出，增强错误提示，表示有未处理的异常情况
   var events = this._events;
+  // 调试时，可以使用 util.inspect() 来查看 object 的信息 // console.log(inspect(events, true))
   if (events !== undefined)
     doError = (doError && events.error === undefined);
   else if (!doError)
     return false;
 
-  console.log('doError after: >>>', doError)
   // If there is no 'error' event listener then throw.
   if (doError) {
     var er;
@@ -180,25 +181,31 @@ EventEmitter.prototype.emit = function emit(type) {
   }
 
   var handler = events[type];
+  
+  console.log(inspect(events, true, 3))
 
   if (handler === undefined)
     return false;
 
   /**
-   * 函数：事件注册了单个侦听器，type: handler，直接执行
-   * 数组：事件注册了多个侦听器，type: [handler, handler, ...]，使用 for 循环逐个调用
+   * 判断 events 对象里该事件的 handler 类型，如果为：
+   * 1.函数：事件注册了单个侦听器，type: handler，直接执行
+   * 2.数组：事件注册了多个侦听器，type: [handler, handler, ...]，使用 for 循环逐个调用执行
    *
-   * 注意：执行的并不是原数组，而是 arrayClone 拷贝出来的一份，是为了防止在一个事件监听器中监听同一个事件，从而导致死循环的出现
+   * 注意很重要的一点：执行的并不是原数组，而是 arrayClone 拷贝出来的一份，是为了防止在一个事件监听器中监听同一个事件，从而导致死循环的出现
    * 例如：
-   * ee.on('event1', () => { ee.on('event1', ()=>{}) })
-   * emit('event1')
-   * 这么写确实给原监听器数组添加了新的监听函数，但并没有影响到当前这个被拷贝出来的副本数组？？？
+   * ee.on('foo', function bar() { ee.on('foo', bar) })
+   * emit('foo')
+   * 在 emit 'foo' 事件的时候，处理器 'bar' 函数又给 'foo' 事件添加了处理程序，正在迭代的 handler 数组遭到了修改
+   * 所以要执行拷贝出来的数组，保证第一次触发 'foo' 事件时不会调用第二个处理程序而进入死循环
    */
   if (typeof handler === 'function') {
     ReflectApply(handler, this, args);
   } else {
+    console.log('handler', handler)
     var len = handler.length;
     var listeners = arrayClone(handler, len);
+    console.log('listeners', listeners)
     for (var i = 0; i < len; ++i)
       ReflectApply(listeners[i], this, args);
   }
@@ -215,6 +222,7 @@ function _addListener(target, type, listener, prepend) {
 
   events = target._events;
   if (events === undefined) {
+    // 如果是第一次为 event emitter 实例添加事件和监听器
     events = target._events = Object.create(null);
     target._eventsCount = 0;
   } else {
