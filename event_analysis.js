@@ -181,7 +181,7 @@ EventEmitter.prototype.emit = function emit(type) {
   }
 
   var handler = events[type];
-  
+
   console.log(inspect(events, true, 3))
 
   if (handler === undefined)
@@ -213,6 +213,14 @@ EventEmitter.prototype.emit = function emit(type) {
   return true;
 };
 
+/**
+ *
+ * @param {*} target 上下文，总是传入 this，即：EventEmitter 实例
+ * @param {String} type 事件类型名称
+ * @param {Function} listener 事件监听器
+ * @param {Boolean} prepend prependListener 时传入 true，将监听器函数放入监听器数组头部
+ * @returns this
+ */
 function _addListener(target, type, listener, prepend) {
   var m;
   var events;
@@ -223,12 +231,14 @@ function _addListener(target, type, listener, prepend) {
   events = target._events;
   if (events === undefined) {
     // 如果是第一次为 event emitter 实例添加事件和监听器
+    // Object.create 方法创建一个纯净的对象
     events = target._events = Object.create(null);
     target._eventsCount = 0;
   } else {
     // To avoid recursion in the case that type === "newListener"! Before
     // adding it to the listeners, first emit "newListener".
     if (events.newListener !== undefined) {
+      // debugger
       target.emit('newListener', type,
                   listener.listener ? listener.listener : listener);
 
