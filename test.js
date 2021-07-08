@@ -1,9 +1,26 @@
 var EventEmitter = require('./event_analysis')
 
 var ee = new EventEmitter()
-ee.on('taowa', function outter() {
-  console.log('outter')
-  ee.on('taowa', outter)
-})
+// ee.once('newListener', function (event, listener) {
+//   // if (event === 'aEvent') {
+//   //   // Insert a new listener in front
+//   //   ee.on('bEvent', () => {
+//   //     console.log('B Event');
+//   //   });
+//   // }
+//   console.log('new listener event', event)
+// })
 
-ee.emit('taowa')
+ee.on('aEvent', () => {
+  console.log('A Event');
+});
+ee.once('newListener', function (event, listener) {
+  // if (event === 'aEvent') {
+  //   // Insert a new listener in front
+  //   ee.on('bEvent', () => {
+  //     console.log('B Event');
+  //   });
+  // }
+  console.log('new listener event', event)
+})
+ee.emit('aEvent');

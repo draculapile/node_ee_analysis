@@ -182,7 +182,7 @@ EventEmitter.prototype.emit = function emit(type) {
 
   var handler = events[type];
   
-  console.log(inspect(events, true, 3))
+  console.log(inspect(events, true))
 
   if (handler === undefined)
     return false;
@@ -202,10 +202,8 @@ EventEmitter.prototype.emit = function emit(type) {
   if (typeof handler === 'function') {
     ReflectApply(handler, this, args);
   } else {
-    console.log('handler', handler)
     var len = handler.length;
     var listeners = arrayClone(handler, len);
-    console.log('listeners', listeners)
     for (var i = 0; i < len; ++i)
       ReflectApply(listeners[i], this, args);
   }
@@ -219,6 +217,8 @@ function _addListener(target, type, listener, prepend) {
   var existing;
 
   checkListener(listener);
+  
+  console.log('_addListener', type, listener)
 
   events = target._events;
   if (events === undefined) {
@@ -226,6 +226,11 @@ function _addListener(target, type, listener, prepend) {
     events = target._events = Object.create(null);
     target._eventsCount = 0;
   } else {
+    // 如果在注册一个事件的监听器之前，this.events 上有 'newListener'，即注册过 'newListener' 事件的监听器
+    // 则：直接 emit 'newListener'，即执行 'newListener' 上的监听器函数
+    // 设计思维就是，用户使用 'newListener' API 就是为了在注册一个 new listener 时，处理一些逻辑
+    // 而 Node.js 源码内部，确实是这么用的
+    
     // To avoid recursion in the case that type === "newListener"! Before
     // adding it to the listeners, first emit "newListener".
     if (events.newListener !== undefined) {
