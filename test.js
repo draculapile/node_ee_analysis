@@ -1,19 +1,6 @@
 var EventEmitter = require('./event_analysis')
 
 var ee = new EventEmitter()
-// ee.once('newListener', function (event, listener) {
-//   // if (event === 'aEvent') {
-//   //   // Insert a new listener in front
-//   //   ee.on('bEvent', () => {
-//   //     console.log('B Event');
-//   //   });
-//   // }
-//   console.log('new listener event', event)
-// })
-
-ee.on('aEvent', () => {
-  console.log('A Event');
-});
 ee.once('newListener', function (event, listener) {
   // if (event === 'aEvent') {
   //   // Insert a new listener in front
@@ -21,6 +8,10 @@ ee.once('newListener', function (event, listener) {
   //     console.log('B Event');
   //   });
   // }
-  console.log('new listener event', event)
+  console.log('user new listener event', event)
 })
-ee.emit('aEvent');
+
+// ee.on('aEvent', () => {
+//   console.log('A Event');
+// });
+// ee.emit('newListener');

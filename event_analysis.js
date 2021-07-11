@@ -78,11 +78,11 @@ EventEmitter.EventEmitter = EventEmitter;
 
 
 // _events: {}
-// 保存 eventEmitter 实例中所有注册事件 [key] 和所对应的处理函数 [listener]
+// 保存 ee 实例中所有注册事件 [key] 和所对应的处理函数 [listener]
 // [key]: listener / [listener1, listener2, ...]，事件可能注册了一个或多个监听函数
 
 // _eventsCount: Number
-// eventEmitter 实例中注册的事件个数
+// ee 实例中注册的事件个数
 
 // _maxListeners: Number
 // 单个事件最多能承载的监听函数个数，默认值为 defaultMaxListeners: 10
@@ -101,7 +101,7 @@ function checkListener(listener) {
   }
 }
 
-// 定义 eventEmitter 实例上的 defaultMaxListeners 默认值的 get set 方法，可取值，可修改
+// 定义 ee 实例上的 defaultMaxListeners 默认值的 get set 方法，可取值，可修改
 Object.defineProperty(EventEmitter, 'defaultMaxListeners', {
   enumerable: true,
   get: function() {
@@ -150,6 +150,7 @@ EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
 
 // emit 发射器实现，核心思想是依次执行每个 listener
 EventEmitter.prototype.emit = function emit(type) {
+  console.log('emit called')
   var args = [];
   for (var i = 1; i < arguments.length; i++) args.push(arguments[i]);
   var doError = (type === 'error');
@@ -181,8 +182,8 @@ EventEmitter.prototype.emit = function emit(type) {
   }
 
   var handler = events[type];
-  
-  console.log(inspect(events, true))
+
+  console.log(inspect(events, true), Object.keys(events))
 
   if (handler === undefined)
     return false;
@@ -226,27 +227,37 @@ function _addListener(target, type, listener, prepend) {
 
   checkListener(listener);
 
-  console.log('_addListener', type, listener)
-
   events = target._events;
   if (events === undefined) {
-    // 如果是第一次为 event emitter 实例添加事件和监听器
+    // 如果是第一次为 ee 实例添加事件和监听器
     // Object.create 方法创建一个纯净的对象
     events = target._events = Object.create(null);
     target._eventsCount = 0;
   } else {
-    // 如果在注册一个事件的监听器之前，this.events 上有 'newListener'，即注册过 'newListener' 事件的监听器
-    // 则：直接 emit 'newListener'，即执行 'newListener' 上的监听器函数
+    // 在注册一个事件的监听器时，如果 this.events 上有 'newListener'，即注册过 'newListener' 事件的监听器
+    // 则：ee 实例会直接 emit 'newListener'，即执行 'newListener' 上的监听器函数
     // 设计思维就是，用户使用 'newListener' API 就是为了在注册一个 new listener 时，处理一些逻辑
-    // 而 Node.js 源码内部，确实是这么用的
+    // Node.js 源码内部，确实是这么用的
+
+    // 而且，当出现以下情景时：
+    // ee.once('newListener', (event, listener) => {
+    //   if (event === 'eventA') {
+    //     ee.on('eventA', () => console.log('this callback will be called first'))
+    //   }
+    // })
+    // ee.on('eventA', () => console.log('event A'))
+    // 即：在 'newListener' 监听器中，如果为一个事件 A 注册了监听器函数，那么它会被插入到在 on 方法中为 A 注册的
+    // eventA 监听器之前执行
+
 
     // To avoid recursion in the case that type === "newListener"! Before
     // adding it to the listeners, first emit "newListener".
     if (events.newListener !== undefined) {
-      // debugger
+      // target === this
       target.emit('newListener', type,
                   listener.listener ? listener.listener : listener);
 
+      // 重新在 this 上拿到 _events，因为 'newListener' 的监听器函数可能会修改 events 对象
       // Re-assign `events` because a newListener handler could have caused the
       // this._events to be assigned to a new object
       events = target._events;
@@ -254,6 +265,10 @@ function _addListener(target, type, listener, prepend) {
     existing = events[type];
   }
 
+  // 如果 events 上没有该事件的监听器，则添加到 events 对象
+  // 否则：判断 events[type] 是函数（之前只为该事件注册了一个监听器）还是数组（之前已经为该事件注册了多个监听器）
+  //      并根据 prepend 参数，决定将本次注册的监听器函数插入到监听器数组头部或者尾部
+  //      本次注册完成后，这个事件的 listener 一定是一个数组形式
   if (existing === undefined) {
     // Optimize the case of one listener. Don't need the extra array object.
     existing = events[type] = listener;
@@ -270,6 +285,7 @@ function _addListener(target, type, listener, prepend) {
       existing.push(listener);
     }
 
+    // 判断该事件注册的监听器是否超过 max listener阈值，超过的话抛出警告信息
     // Check for listener leak
     m = _getMaxListeners(target);
     if (m > 0 && existing.length > m && !existing.warned) {
@@ -291,6 +307,8 @@ function _addListener(target, type, listener, prepend) {
   return target;
 }
 
+// addListener、on、prependListener 三个方法，均执行 _addListener 逻辑
+// prependListener 方法的 prepend 参数 为 true
 EventEmitter.prototype.addListener = function addListener(type, listener) {
   return _addListener(this, type, listener, false);
 };
@@ -302,6 +320,17 @@ EventEmitter.prototype.prependListener =
       return _addListener(this, type, listener, true);
     };
 
+// 单次监听器 once，最多触发一次，触发后，执行的是 _onceWrap 包裹的 listener
+
+// _onceWrap 内部定义了一个对象 state，除了 target(指向 ee 实例)、type、listener 外，定义了 fired 和 wrapFn
+// fired: 标识是否调用，初始值为 false
+// wrapFn: onceWrapper 函数绑定了 state 对象后的拷贝
+// _onceWrap 的返回值是绑定了 state 的 onceWrapper 函数的返回值
+
+// onceWrapper 函数内部的 this === state
+// 判断 fired 为 false，然后在用户定义的 listener 执行前
+// 用 ee 实例的 removeListener 方法将 listenr 移除，然后将 fired 置为 true
+// 执行 listener，返回原 listener 的返回值
 function onceWrapper() {
   if (!this.fired) {
     this.target.removeListener(this.type, this.wrapFn);
@@ -314,6 +343,7 @@ function onceWrapper() {
 
 function _onceWrap(target, type, listener) {
   var state = { fired: false, wrapFn: undefined, target: target, type: type, listener: listener };
+  // wrapped 的 'this' 绑定到 state
   var wrapped = onceWrapper.bind(state);
   wrapped.listener = listener;
   state.wrapFn = wrapped;
