@@ -356,12 +356,20 @@ EventEmitter.prototype.once = function once(type, listener) {
   return this;
 };
 
+// 将单次触发的 listenr 执行提前
 EventEmitter.prototype.prependOnceListener =
     function prependOnceListener(type, listener) {
       checkListener(listener);
       this.prependListener(type, _onceWrap(this, type, listener));
       return this;
     };
+
+// 移除指定事件的一个监听器，同样需要判断该事件注册了单个还是多个监听器
+// 对于多个监听器 listener 数组的操作，调用了 spliceOne 方法从数组中删除单项
+// （在数据量大的情况下，spiceOne 方法确实比 Array.prototype.splice() 方法略快）
+// 同样的，如果说 event 上有为 'removeListener' 注册监听器，
+// 那么在执行本次 remove 之后（与 _addListener 内部对 'newListener' 的处理时机相反），ee 实例也会触发 'removeListener' 事件执行回调
+// 定义 originalListener 也是为了保证能拿到原 listener
 
 // Emits a 'removeListener' event if and only if the listener was removed.
 EventEmitter.prototype.removeListener =
@@ -387,6 +395,7 @@ EventEmitter.prototype.removeListener =
             this.emit('removeListener', type, list.listener || listener);
         }
       } else if (typeof list !== 'function') {
+        // position 方便判断当前对数组进行什么操作
         position = -1;
 
         for (i = list.length - 1; i >= 0; i--) {
