@@ -1,4 +1,5 @@
-const inspect = require('util').inspect
+// const inspect = require('util').inspect
+
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -183,7 +184,7 @@ EventEmitter.prototype.emit = function emit(type) {
 
   var handler = events[type];
 
-  console.log(inspect(events, true), Object.keys(events))
+  // console.log(inspect(events, true), Object.keys(events))
 
   if (handler === undefined)
     return false;
@@ -478,6 +479,9 @@ EventEmitter.prototype.removeAllListeners =
       return this;
     };
 
+// 返回指定事件监听器数组的副本
+// 'rawListener' 调用时会传入 unwrap 为 false
+// 会返回被包装过的监听器，如 _onceWrap() 处理过的 listener
 function _listeners(target, type, unwrap) {
   var events = target._events;
 
@@ -532,6 +536,7 @@ EventEmitter.prototype.eventNames = function eventNames() {
   return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
 };
 
+// 三个工具函数
 function arrayClone(arr, n) {
   var copy = new Array(n);
   for (var i = 0; i < n; ++i)
@@ -553,6 +558,12 @@ function unwrapListeners(arr) {
   return ret;
 }
 
+// 对外暴露的 once 方法，在 web 平台的 EventTarget DOM 接口，也可使用
+// 返回一个 Promise，当 ee 实例 emit 给定 name 事件时，将所有给定事件的所有参数 resolve；
+// 如果 ee 实例 emit 'error' 事件则 reject(err)，可以被 try catch 捕获
+
+// 注意，如果 once 方法传入 name 为 error 时，表示 once 在等待 error 事件本身
+// 那么 ee 实例 emit 'error' 时，once 方法将会当作普通事件一样处理，即走到 resolve() 流程，而不会再 reject
 function once(emitter, name) {
   return new Promise(function (resolve, reject) {
     function errorListener(err) {
@@ -568,6 +579,7 @@ function once(emitter, name) {
     };
 
     eventTargetAgnosticAddListener(emitter, name, resolver, { once: true });
+    // 如果 name !== 'error'，传入普通事件，需要手动添加 error 情况的处理
     if (name !== 'error') {
       addErrorHandlerIfEventEmitter(emitter, errorListener, { once: true });
     }
@@ -588,6 +600,8 @@ function eventTargetAgnosticAddListener(emitter, name, listener, flags) {
       emitter.on(name, listener);
     }
   } else if (typeof emitter.addEventListener === 'function') {
+    // 根据是否有 'addEventListener' 方法，判断是否为 web EventEmitter 接口，此时不监听 error 事件
+
     // EventTarget does not have `error` event semantics like Node
     // EventEmitters, we do not listen for `error` events here.
     emitter.addEventListener(name, function wrapListener(arg) {
@@ -602,3 +616,7 @@ function eventTargetAgnosticAddListener(emitter, name, listener, flags) {
     throw new TypeError('The "emitter" argument must be of type EventEmitter. Received type ' + typeof emitter);
   }
 }
+
+// ************ end ************
+// Node.js 的 EventEmitter 设计还是很完备的，而且很考虑细节上的性能优化，比如 for 循环内部的会使用 ++i
+// 来代替常见的 i++ 操作（i++ 是在使用当前值之后再 +1，会占用一个临时变量空间，++i 则相对节省内存）
